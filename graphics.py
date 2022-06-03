@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-def draw_rectangles(a_img, d):
+def draw_rectangles_from_ocr_data(a_img, d):
     img = a_img.copy()
     n_boxes = len(d['level'])
     for i in range(n_boxes):
