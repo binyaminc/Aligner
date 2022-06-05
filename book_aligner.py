@@ -11,8 +11,8 @@ import re
 
 def main():
 
-    input_pdf_path = r'D:\visual_studio_projects\Aligner\my_data\J.R.R. Tolkien - La Hobito.pdf'
-    output_dir_path = r'D:\visual_studio_projects\Aligner\my_data\hobbit_splited_100_resolution'
+    input_pdf_path = r'D:\visual_studio_projects\Aligner_backup\my_data\J.R.R. Tolkien - La Hobito.pdf'
+    output_dir_path = r'D:\visual_studio_projects\Aligner_backup\my_data\hobbit_splited_100_resolution'
 
     # check if there are arguments
     arg_num = len(sys.argv)
@@ -28,7 +28,7 @@ def main():
 
     # converting pdf file to images
     begin_converting_to_jpg = time.time()
-    pages = convert_from_path(input_pdf_path, thread_count=multiprocessing.cpu_count(), dpi=50)  # 200
+    pages = convert_from_path(input_pdf_path, thread_count=multiprocessing.cpu_count(), dpi=100)  # 200
     print("converting pdf to jpgs...")
     for i in range(len(pages)):
         pages[i].save((output_dir_path + r'\page%s.jpg') % i)

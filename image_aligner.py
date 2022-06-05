@@ -15,13 +15,13 @@ MAX_RECT_WIDTH = 0.17
 MIN_RETT_HEIGHT = 0.008
 MAX_RECT_HEIGHT = 0.03
 MAX_CLUSTER_DIS = 0.06
-MAX_MARGIN_DIS = 0  # TODO: find real values
-MIN_MARGIN_DIS = 0
+MAX_MARGIN_DIS = 0.17  # originally, the max width was 2/3 -> margin is 1/6, but I took some spair
+# MIN_MARGIN_DIS = 0
 MAX_ROTATION_ANGLE = 10
 
 
 def main():
-    input_img_path = r'orig_page.jpg'  # page221_clusters
+    input_img_path = r'page25.jpg'  # page221_clusters
     output_img_path = r'orig_page_aligned.jpg'
     output_steps_path = r'image_steps'
 
@@ -52,53 +52,86 @@ def main():
     rects_points = filter_by_clusters(rects_points, img_scale=(w+h)/2)
     cv2.imwrite(output_steps_path + r'\2_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
 
-    # create black image with white points in the edges of the rectangles
+    # create black image with white points in the edges of the rectangles - for debugging
     points_img = gr.draw_points(gr.get_black_image(img.shape), rects_points)
-    cv2.imwrite(output_steps_path + r'\3_points_img.jpg', points_img)
+    cv2.imwrite(output_steps_path + r'\3_points_img.jpg', cv2.bitwise_not(points_img))
 
     # find min rectangle around the rects_points
-    box2D = cv2.minAreaRect(np.array(rects_points))  # (center(x, y), (w, h), angle)
-    points = np.int0(cv2.boxPoints(box2D))
+    box2d = cv2.minAreaRect(np.array(rects_points))  # box2d = (center(x, y), (w, h), angle)
+    points = np.int0(cv2.boxPoints(box2d))
 
-    # draw polylines of box2d, to check if succeeded
-    img_with_box2d = cv2.polylines(img, [points], isClosed=True, color=(0,0,0), thickness=3)
+    # draw polylines of box2d - for debugging
+    img_with_box2d = cv2.polylines(img.copy(), [points], isClosed=True, color=(0,0,0), thickness=3)
     cv2.imwrite(output_steps_path + r'\4_img_with_box2d.jpg', img_with_box2d)
 
     # align, if all the conditions are met
-    box_angle = box2D[2]
-    if not -MAX_ROTATION_ANGLE < box_angle < MAX_ROTATION_ANGLE:  # the recognition failed for some reason and the angle is not valid - do nothing
+    box_angle = box2d[2] if box2d[2] < 45 else box2d[2] - 90
+    if not rects_points or not -MAX_ROTATION_ANGLE < box_angle < MAX_ROTATION_ANGLE:  # the recognition failed for some reason and the angle is not valid - do nothing
         cv2.imwrite(output_steps_path + r'\6_img_result.jpg', img)
         cv2.imwrite(output_img_path, img)
     else:
-        img_mask, x_shift, y_shift = proccess_box2d(box2D, img.shape)
+        img_mask, x_shift, y_shift = proccess_box2d(box2d, img.shape)
         cv2.imwrite(output_steps_path + r'\5_img_mask.jpg', img_mask)
 
         # find the rotation+shift matrix
-        M = cv2.getRotationMatrix2D(center=box2D[0], angle=box_angle, scale=1)
+        M = cv2.getRotationMatrix2D(center=box2d[0], angle=box_angle, scale=1)
         M[0][2] += x_shift
         M[1][2] += y_shift
 
         # rotate+shift
         rotated_img = cv2.warpAffine(img, M, dsize=(w, h))
-        rotated_mask = cv2.warpAffine(img_mask, M)
-        result = cv2.bitwise_and(rotated_img, rotated_mask)
+        rotated_mask = cv2.warpAffine(img_mask, M, dsize=(w, h))
+        rotated_mask = cv2.bitwise_not(rotated_mask)
+        result = cv2.bitwise_or(rotated_img, rotated_mask)
 
         cv2.imwrite(output_steps_path + r'\6_img_result.jpg', result)
         cv2.imwrite(output_img_path, result)
 
 
 def proccess_box2d(box2d, img_shape):
-    # TODO:
-    #  1. define up, down, left, right edges ([p1, p2] that defines the edge)
-    #  2. define x_shift, y_shift so that the box will be centered
-    #  2. check for each direction the distant to the end of the image (average distance, that will remain after rotation)
-    #  3. stretch borders in mask for those that aren't close enough, and zero the relevant shifts
-    #  4. return :)
-    return gr.get_black_image(img_shape), 0, 0
+    """
+    1. define x_shift, y_shift so that the box will be centered
+    2. define up, down, left, right edges ([p1, p2] that defines the edge)
+    2. check for each direction the distant to the end of the image (average distance, that will remain after rotation)
+    3. stretch borders in mask for those that aren't close enough, and zero the relevant shifts
+    4. return :)
+    :param box2d: the box to process
+    :param img_shape: shape of the image, (h, w)
+    :return: image mask, x_shift, y_shift
+    """
+    # find x_shift, y_shift
+    (center_x, center_y) = box2d[0]
+    (h, w) = img_shape[:2]
+    x_shift = w/2 - center_x
+    y_shift = h/2 - center_y
 
+    # find up, down, left, right edges ([p1, p2] that defines the edge)
+    edges = gr.find_edges(box2d)
+    [up, down, left, right] = edges
+
+    # check the distance to the end of the image, to decide if there was a mistake in recognition
+    box_angle = box2d[2] if box2d[2] < 45 else -(90 - box2d[2])
+    M = cv2.getRotationMatrix2D(center=box2d[0], angle=box_angle, scale=1)
+    [r_up, r_down, r_left, r_right] = [gr.rotate_edge(edge, M) for edge in edges]
+    if (r_left[0][0] + w-r_right[0][0]) > 2*MAX_MARGIN_DIS * w:  # if the width is too thin
+        x_shift = 0
+        edges = gr.stretch_width(edges, img_shape)
+    if r_up[1][1] > MAX_MARGIN_DIS * w:  # if the height is too low. Assumption - the image starts relatively high
+        y_shift = 0
+        edges = gr.stretch_up(edges, img_shape)
+    elif h-r_down[1][1] > MAX_MARGIN_DIS * w:  # if there is a text in the upper part - it should stay there
+        y_shift = 0
+
+    # create mask using the edges
+    img_mask = gr.create_mask_inside_edges(edges, img_shape)
+
+    return img_mask, x_shift, y_shift
 
 
 def filter_by_clusters(rects_points, img_scale):
+    if not rects_points:
+        return rects_points
+
     clusters = []
     for i in range(int(len(rects_points)/4)):
         rect = rects_points[4*i: 4*(i+1)]  # [p1, p2, p3, p4]
