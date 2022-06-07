@@ -21,8 +21,8 @@ MAX_ROTATION_ANGLE = 10
 
 
 def main():
-    input_img_path = r'page25.jpg'  # page221_clusters
-    output_img_path = r'orig_page_aligned.jpg'
+    input_img_path = ""
+    output_img_path = "result_aligned.jpg"
     output_steps_path = r'image_steps'
 
     # defining pathes
@@ -34,7 +34,7 @@ def main():
         output_steps_path = sys.argv[3]
 
     if not os.path.isfile(input_img_path):
-        print("image not found...")
+        print("image not found, missing path is: " + input_img_path)
         return
 
     # read image
@@ -43,6 +43,7 @@ def main():
 
     # get ocr data using pytesseract-ocr
     ocr_data = pytesseract.image_to_data(img, output_type=Output.DICT)
+    #cv2.imwrite(output_steps_path + r'\1_5_all_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
 
     # filter bad rectangles - by size, 'level' and clusters
     (h, w) = img.shape[:2]
@@ -53,8 +54,14 @@ def main():
     cv2.imwrite(output_steps_path + r'\2_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
 
     # create black image with white points in the edges of the rectangles - for debugging
-    points_img = gr.draw_points(gr.get_black_image(img.shape), rects_points)
-    cv2.imwrite(output_steps_path + r'\3_points_img.jpg', cv2.bitwise_not(points_img))
+    points_img = gr.draw_points(gr.get_white_image(img.shape), rects_points)
+    cv2.imwrite(output_steps_path + r'\3_points_img.jpg', points_img)
+
+    # make sure there are rect_points
+    if not rects_points:
+        cv2.imwrite(output_steps_path + r'\6_img_result.jpg', img)
+        cv2.imwrite(output_img_path, img)
+        return
 
     # find min rectangle around the rects_points
     box2d = cv2.minAreaRect(np.array(rects_points))  # box2d = (center(x, y), (w, h), angle)
@@ -64,9 +71,9 @@ def main():
     img_with_box2d = cv2.polylines(img.copy(), [points], isClosed=True, color=(0,0,0), thickness=3)
     cv2.imwrite(output_steps_path + r'\4_img_with_box2d.jpg', img_with_box2d)
 
-    # align, if all the conditions are met
+    # aligning, if all the conditions are met
     box_angle = box2d[2] if box2d[2] < 45 else box2d[2] - 90
-    if not rects_points or not -MAX_ROTATION_ANGLE < box_angle < MAX_ROTATION_ANGLE:  # the recognition failed for some reason and the angle is not valid - do nothing
+    if not -MAX_ROTATION_ANGLE < box_angle < MAX_ROTATION_ANGLE:  # the recognition failed for some reason and the angle is not valid - do nothing
         cv2.imwrite(output_steps_path + r'\6_img_result.jpg', img)
         cv2.imwrite(output_img_path, img)
     else:
@@ -79,9 +86,8 @@ def main():
         M[1][2] += y_shift
 
         # rotate+shift
-        rotated_img = cv2.warpAffine(img, M, dsize=(w, h))
-        rotated_mask = cv2.warpAffine(img_mask, M, dsize=(w, h))
-        rotated_mask = cv2.bitwise_not(rotated_mask)
+        rotated_img = cv2.warpAffine(img, M, dsize=(w, h), borderValue=(255,255,255))
+        rotated_mask = cv2.warpAffine(img_mask, M, dsize=(w, h), borderValue=(255,255,255))
         result = cv2.bitwise_or(rotated_img, rotated_mask)
 
         cv2.imwrite(output_steps_path + r'\6_img_result.jpg', result)

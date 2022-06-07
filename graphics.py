@@ -5,6 +5,12 @@ import numpy as np
 
 
 def stretch_width(edges, img_shape):
+    """
+    stretch/widen the rectangle defined by "edges" to the sides of the img
+    :param edges: the edges of the rectangle
+    :param img_shape: the shape of the img
+    :return: the stretched edges
+    """
     [up, down, left, right] = edges
     (h, w) = img_shape[:2]
 
@@ -57,8 +63,9 @@ def create_mask_inside_edges(edges, img_shape):
     bottom_left = get_common_point(left, down)
     bottom_right = get_common_point(down, right)
     top_right = get_common_point(right, up)
-    mask = get_black_image(img_shape)
-    mask = cv2.fillConvexPoly(mask, np.array([top_left, bottom_left, bottom_right, top_right]), (255,255,255))
+
+    mask = get_white_image(img_shape)
+    mask = cv2.fillConvexPoly(mask, np.array([top_left, bottom_left, bottom_right, top_right]), (0, 0, 0))
     return mask
 
 
@@ -86,7 +93,7 @@ def rotate_edge(edge, M):
 def find_edges(box2d):
     p = np.int0(cv2.boxPoints(box2d))
     p = sorted(p, key=lambda p: p[0])
-    if p[2][0] == p[3][0] or p[2][1] == p[3][1]:  # if there is no N-shape in points order - replace
+    if p[1][0] == p[2][0] or p[1][1] == p[2][1]:  # if there is no N-shape in points order - replace
         p[2], p[3] = p[3], p[2]
     e1, e2, e3, e4 = [p[0], p[1]], [p[0], p[2]], [p[2], p[3]], [p[1], p[3]]  # e1 is parallel to e3, e2 parallel to e4
 
@@ -130,13 +137,13 @@ def draw_rectangles_from_ocr_data(a_img, d):
 def draw_points(a_img, points):
     img = a_img.copy()
     for point in points:
-        img = cv2.circle(img, point, radius=3, color=(255, 255, 255), thickness=-1)
+        img = cv2.circle(img, point, radius=3, color=(0, 0, 0), thickness=-1)
     return img
 
 
-def get_black_image(img_shape):
+def get_white_image(img_shape):
     (h, w) = img_shape[:2]
-    return np.zeros((h, w, 1), dtype = "uint8")
+    return cv2.bitwise_not(np.zeros((h, w, 1), dtype = "uint8"))
 
 
 def print_img(win_name, img):
