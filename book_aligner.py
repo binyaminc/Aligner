@@ -2,12 +2,13 @@ import shutil
 import sys
 import os
 from pdf2image import convert_from_path
-from fpdf import FPDF
 from PIL import Image
 import time
 import multiprocessing
 from multiprocessing import Pool
 import re
+
+# TODO: add optional parameter of dpi (quality of image)
 
 
 def main():
@@ -15,16 +16,14 @@ def main():
     input_pdf_path = ""
     output_dir_path = ""
 
-    # check if there are arguments
+    # getting argument of input_pdf_path
     arg_num = len(sys.argv)
     if arg_num == 2:  # script name, input pdf path
         input_pdf_path = sys.argv[1]
         output_pdf_path = input_pdf_path[:input_pdf_path.rfind('.')] + ' - aligned.pdf'
         output_dir_path = input_pdf_path[:input_pdf_path.rfind('.')] + ' - pages'
-    elif arg_num == 3:  # script name, input pdf path, output dir path
-        input_pdf_path = sys.argv[1]
-        output_pdf_path = input_pdf_path[:input_pdf_path.rfind('.')] + ' - aligned.pdf'  # TODO: think what to do here - where to put output pdf
-        output_dir_path = sys.argv[2]
+    else:
+        print("invalid number of arguments. required 1 argument of pdf path")
 
     if not os.path.exists(input_pdf_path):
         print("pdf file not found...")

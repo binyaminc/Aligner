@@ -16,8 +16,13 @@ MIN_RETT_HEIGHT = 0.008
 MAX_RECT_HEIGHT = 0.03
 MAX_CLUSTER_DIS = 0.06
 MAX_MARGIN_DIS = 0.17  # originally, the max width was 2/3 -> margin is 1/6, but I took some spair
-# MIN_MARGIN_DIS = 0
 MAX_ROTATION_ANGLE = 10
+
+DEBUG_MODE = False
+
+# TODO:
+#  add option to include areas like page number in mask, but not to include them in the aligning and centering
+#  add option not to clear the edges, only rotate and shift
 
 
 def main():
@@ -39,11 +44,15 @@ def main():
 
     # read image
     img = cv2.imread(input_img_path, cv2.IMREAD_GRAYSCALE)
-    cv2.imwrite(output_steps_path + r'\1_image.jpg', img)
+    if DEBUG_MODE:
+        if not os.path.isdir(output_steps_path):
+            os.mkdir(output_steps_path)
+        cv2.imwrite(output_steps_path + r'\1_image.jpg', img)
 
     # get ocr data using pytesseract-ocr
     ocr_data = pytesseract.image_to_data(img, output_type=Output.DICT)
-    #cv2.imwrite(output_steps_path + r'\1_5_all_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
+    #if DEBUG_MODE:
+    #    cv2.imwrite(output_steps_path + r'\1_5_all_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
 
     # filter bad rectangles - by size, 'level' and clusters
     (h, w) = img.shape[:2]
@@ -51,11 +60,13 @@ def main():
     rects_points = get_points_of_ocr_data(ocr_data)
     # filter by clusters
     rects_points = filter_by_clusters(rects_points, img_scale=(w+h)/2)
-    cv2.imwrite(output_steps_path + r'\2_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
+    if DEBUG_MODE:
+        cv2.imwrite(output_steps_path + r'\2_rectangles.jpg', gr.draw_rectangles_from_ocr_data(img, ocr_data))
 
     # create black image with white points in the edges of the rectangles - for debugging
-    points_img = gr.draw_points(gr.get_white_image(img.shape), rects_points)
-    cv2.imwrite(output_steps_path + r'\3_points_img.jpg', points_img)
+    if DEBUG_MODE:
+        points_img = gr.draw_points(gr.get_white_image(img.shape), rects_points)
+        cv2.imwrite(output_steps_path + r'\3_points_img.jpg', points_img)
 
     # make sure there are rect_points
     if not rects_points:
@@ -68,17 +79,20 @@ def main():
     points = np.int0(cv2.boxPoints(box2d))
 
     # draw polylines of box2d - for debugging
-    img_with_box2d = cv2.polylines(img.copy(), [points], isClosed=True, color=(0,0,0), thickness=3)
-    cv2.imwrite(output_steps_path + r'\4_img_with_box2d.jpg', img_with_box2d)
+    if DEBUG_MODE:
+        img_with_box2d = cv2.polylines(img.copy(), [points], isClosed=True, color=(0,0,0), thickness=3)
+        cv2.imwrite(output_steps_path + r'\4_img_with_box2d.jpg', img_with_box2d)
 
     # aligning, if all the conditions are met
     box_angle = box2d[2] if box2d[2] < 45 else box2d[2] - 90
     if not -MAX_ROTATION_ANGLE < box_angle < MAX_ROTATION_ANGLE:  # the recognition failed for some reason and the angle is not valid - do nothing
-        cv2.imwrite(output_steps_path + r'\6_img_result.jpg', img)
+        if DEBUG_MODE:
+            cv2.imwrite(output_steps_path + r'\6_img_result.jpg', img)
         cv2.imwrite(output_img_path, img)
     else:
         img_mask, x_shift, y_shift = proccess_box2d(box2d, img.shape)
-        cv2.imwrite(output_steps_path + r'\5_img_mask.jpg', img_mask)
+        if DEBUG_MODE:
+            cv2.imwrite(output_steps_path + r'\5_img_mask.jpg', img_mask)
 
         # find the rotation+shift matrix
         M = cv2.getRotationMatrix2D(center=box2d[0], angle=box_angle, scale=1)
@@ -90,7 +104,8 @@ def main():
         rotated_mask = cv2.warpAffine(img_mask, M, dsize=(w, h), borderValue=(255,255,255))
         result = cv2.bitwise_or(rotated_img, rotated_mask)
 
-        cv2.imwrite(output_steps_path + r'\6_img_result.jpg', result)
+        if DEBUG_MODE:
+            cv2.imwrite(output_steps_path + r'\6_img_result.jpg', result)
         cv2.imwrite(output_img_path, result)
 
 
